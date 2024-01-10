@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Highlight dates&times
 // @namespace    fanduel.com
-// @version      0.3.0
+// @version      0.4.0
 // @description  Highlights table cells in SGW
 // @author       Shawn Brooker
-// @match        *tvg.com/ITOps/cardSummary/TVGRaceList?TVGCardID=*
+// @match        http*://sgw.gcp-prod.tvg.com/ITOps/cardSummary/TvgRaceList?TVGCardID=*
+// @match        http*://sgw.gcp-dev.tvg.com/ITOps/cardSummary/TvgRaceList?TVGCardID=*
 // ==/UserScript==
 
 (function() {
@@ -13,14 +14,13 @@
 	console.log('Script started');
 	const tbody = document.querySelector('#datatable_TVG_Race_List tbody');
 	if (!tbody) {
-		console.log('Tbody not found');
+		console.log('Tbody not found, script exiting');
 		return;
 	}
-
-	const rows = tbody.querySelectorAll("tr");
-
 	const today = new Date();
 	const todayDate = today.toISOString().slice(0, 10);
+	const cardDate = document.querySelector('body > div.container-fluid > div:nth-child(1) > div > h6 > a:nth-child(1)').innerText.trim();
+	const rows = tbody.querySelectorAll("tr");
 	// console.log('Today\'s Date:', todayDate);
 
 	rows.forEach(row => {
@@ -28,7 +28,7 @@
 		cells.forEach(cell => {
 			const cellText = cell.textContent.trim();
 			// console.log('Cell Text:', cellText);
-			if (cellText.includes(todayDate)) {
+			if (cellText.includes(todayDate) && !cellText.includes(cardDate)) {
 				cell.style.backgroundColor = 'orange';
 			}
 			const timeString = cellText.split(' ')[1]; // Extracting the time part after the space
