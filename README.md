@@ -1,6 +1,6 @@
 # Download Sweden PDFs UserScript
 
-This UserScript enhances the SGW site by highlighting post times based on specific criteria. It uses JavaScript to dynamically modify the appearance of the table.
+This UserScript enhances the SGW site by highlighting post times based on specific criteria. It uses JavaScript to dynamically modify the appearance of the table after the page has loaded completely.
 
 It works on both production and development SGW sites.
 
@@ -24,4 +24,4 @@ blank at the moment
 
 ## Notes
 
-- Highlighted cells are not a neccisarily an issue, it is just to bring attention to that area.
+- Highlighted cells are not a necessarily an issue, it is just to bring attention to that area.

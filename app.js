@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Highlight dates&times
 // @namespace    fanduel.com
-// @version      0.4.0
+// @version      0.5.0
 // @description  Highlights table cells in SGW
 // @author       Shawn Brooker
 // @match        http*://sgw.gcp-prod.tvg.com/ITOps/cardSummary/TvgRaceList?TVGCardID=*
@@ -10,6 +10,9 @@
 
 (function() {
 	'use strict';
+
+	const wrongDateColor = "#cca000"
+	const wrongTimeColor = "#cc6600"
 
 	console.log('Script started');
 	const tbody = document.querySelector('#datatable_TVG_Race_List tbody');
@@ -29,14 +32,14 @@
 			const cellText = cell.textContent.trim();
 			// console.log('Cell Text:', cellText);
 			if (cellText.includes(todayDate) && !cellText.includes(cardDate)) {
-				cell.style.backgroundColor = 'orange';
+				cell.style.backgroundColor = wrongDateColor;
 			}
 			const timeString = cellText.split(' ')[1]; // Extracting the time part after the space
 			const timeParts = timeString.split(':');
 			if (timeParts.length === 3) {
 				const hours = parseInt(timeParts[0], 10);
 				if (!isNaN(hours) && hours >= 1 && hours < 3) {
-					cell.style.backgroundColor = '#cc6600';
+					cell.style.backgroundColor = wrongTimeColor;
 				}
 			}
 		});
