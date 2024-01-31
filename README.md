@@ -1,4 +1,7 @@
-# Download Sweden PDFs UserScript
+# Highlight Dates & Times UserScript
+
+<img alt="user-script header" src="https://github.com/shawnb-fanduel/ops-highlightdates/blob/main/assets/header.png?raw=true"/>
+
 
 This UserScript enhances the SGW site by highlighting post times based on specific criteria. It uses JavaScript to dynamically modify the appearance of the table after the page has loaded completely.
 
