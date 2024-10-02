@@ -1,4 +1,4 @@
-# Highlight Dates & Times UserScript
+# SGW Assist
 
 <img alt="user-script header" src="https://github.com/shawnb-fanduel/ops-highlightdates/blob/main/assets/header.png?raw=true"/>
 
@@ -20,10 +20,6 @@ This UserScript employs JavaScript to perform the following:
 
 1. Install with any UserScript extension in your browser (e.g., Tampermonkey, Greasemonkey).
 2. Visit any TVGCardID page
-
-## Implementation Details
-
-blank at the moment
 
 ## Notes
 
