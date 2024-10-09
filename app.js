@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.1.0
+// @version      0.2.0
 // @description  Highlights problems in SGW
 // @author       Shawn Brooker
 // @match        http*://*sgw.gcp-prod.tvg.com/*
@@ -16,7 +16,7 @@
 		info: "#00aaff",
 		warning: "#cca000",
 		caution: "#cc6600",
-		error: "#ff0000",
+		error: "#fe5f55",
 		success: "#00cc66",
 	};
 	const validTrackCodes = {
@@ -25,22 +25,30 @@
 	};
 
 	// Calls to functions wrapped in try-catch
-	try {
-		fn_HighlightDates();
-	} catch (error) {
-		console.error('Error running fn_HighlightDates:', error);
+	if (location.href.toLowerCase().includes('carddate')) {
+		try {
+			fn_HighlightSpecialCharactersInTrackName();
+		} catch (error) {
+			console.error('Error running fn_HighlightSpecialCharactersInTrackName:', error);
+		}
+		try {
+			fn_ValidateTrackCodes();
+		} catch (error) {
+			console.error('Error running fn_ValidateTrackCodes:', error);
+		}
 	}
-	try {
-		 fn_HighlightSpecialCharactersInTrackName();
-	} catch (error) {
-		 console.error('Error running fn_HighlightSpecialCharactersInTrackName:', error);
+	if (location.href.toLowerCase().includes('tvgcardid')) {
+		try {
+			fn_HighlightDates();
+		} catch (error) {
+			console.error('Error running fn_HighlightDates:', error);
+		}
+        try {
+            fn_ShortenCells();
+        } catch (error) {
+			console.error('Error running fn_ShortenCells:', error);
+		}
 	}
-	try {
-		 fn_ValidateTrackCodes();
-	} catch (error) {
-		 console.error('Error running fn_ValidateTrackCodes:', error);
-	}
-
 	// ALL FUNCTIONS
 	function fn_HighlightDates() {
 		try {
@@ -177,4 +185,45 @@
 			}
 		});
 	}
+
+    function fn_ShortenCells() {
+        const table = document.querySelector('#datatable_TVG_Race_List'); // Target the correct table
+        if (!table) return; // Exit if the table is not found
+
+        const headers = table.querySelectorAll('th'); // Find all table header cells
+        const columnsToCheck = ['TVG Race Conditions', 'Analyst Verdict']; // Array of column names to check
+        let columnIndices = {}; // Object to store column indices
+
+        // Find the index for each column name in the array
+        headers.forEach((header, index) => {
+            const columnName = header.textContent.trim();
+            if (columnsToCheck.includes(columnName)) {
+                columnIndices[columnName] = index;
+            }
+        });
+
+        if (Object.keys(columnIndices).length === 0) return; // Exit if none of the columns are found
+
+        const rows = table.getElementsByTagName("tr");
+
+        for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName("td");
+
+            // Loop through each column that needs to be checked
+            for (const columnName of columnsToCheck) {
+                const columnIndex = columnIndices[columnName];
+
+                if (cells.length > columnIndex) {
+                    let cellText = cells[columnIndex].innerText;
+
+                    // If the cell text is longer than 30 characters, truncate and append "[...]"
+                    if (cellText.length > 30) {
+                        cellText = cellText.slice(0, 30) + "[...]";
+                        // Update the cell text
+                        cells[columnIndex].innerText = cellText;
+                    }
+                }
+            }
+        }
+    }
 })();

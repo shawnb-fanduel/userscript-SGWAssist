@@ -12,14 +12,16 @@ It works on both production and development SGW sites.
 
 This UserScript employs JavaScript to perform the following:
 
-- Highlights cells with today's date
+- Highlights cells with dates taht do not match the card date
 - Highlights cells with race times between 1AM and 3AM
+- Shorens long cells
+- Highlights tracks with missing or incorrect event codes
+- Highlights tracks with url breaking names
 
 
 ## Usage
 
 1. Install with any UserScript extension in your browser (e.g., Tampermonkey, Greasemonkey).
-2. Visit any TVGCardID page
 
 ## Notes
 
