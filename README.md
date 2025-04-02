@@ -12,11 +12,12 @@ It works on both production and development SGW sites.
 
 This UserScript employs JavaScript to perform the following:
 
-- Highlights cells with dates taht do not match the card date
+- Highlights cells with dates that do not match the card date
 - Highlights cells with race times between 1AM and 3AM
 - Shorens long cells
 - Highlights tracks with missing or incorrect event codes
 - Highlights tracks with url breaking names
+- Highlights rows with mismatching runner ammounts
 
 
 ## Usage

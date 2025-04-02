@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.2.0
+// @version      0.3.0
 // @description  Highlights problems in SGW
 // @author       Shawn Brooker
 // @match        http*://*sgw.gcp-prod.tvg.com/*
@@ -25,7 +25,7 @@
 	};
 
 	// Calls to functions wrapped in try-catch
-	if (location.href.toLowerCase().includes('carddate')) {
+	if (location.href.toLowerCase().includes('tvgcardlist')) {
 		try {
 			fn_HighlightSpecialCharactersInTrackName();
 		} catch (error) {
@@ -43,12 +43,20 @@
 		} catch (error) {
 			console.error('Error running fn_HighlightDates:', error);
 		}
-        try {
-            fn_ShortenCells();
-        } catch (error) {
+		try {
+			fn_ShortenCells();
+		} catch (error) {
 			console.error('Error running fn_ShortenCells:', error);
 		}
 	}
+	if (location.href.toLowerCase().includes('reportdifferentrunners')) {
+		try {
+			highlightRunnerDiff();
+		} catch (error) {
+			console.error('Error running highlightRunnerDiff:', error);
+		}
+	}
+
 	// ALL FUNCTIONS
 	function fn_HighlightDates() {
 		try {
@@ -186,44 +194,124 @@
 		});
 	}
 
-    function fn_ShortenCells() {
-        const table = document.querySelector('#datatable_TVG_Race_List'); // Target the correct table
-        if (!table) return; // Exit if the table is not found
+	function fn_ShortenCells() {
+		const table = document.querySelector('#datatable_TVG_Race_List'); // Target the correct table
+		if (!table) return; // Exit if the table is not found
 
-        const headers = table.querySelectorAll('th'); // Find all table header cells
-        const columnsToCheck = ['TVG Race Conditions', 'Analyst Verdict']; // Array of column names to check
-        let columnIndices = {}; // Object to store column indices
+		const headers = table.querySelectorAll('th'); // Find all table header cells
+		const columnsToCheck = ['TVG Race Conditions', 'Analyst Verdict']; // Array of column names to check
+		let columnIndices = {}; // Object to store column indices
 
-        // Find the index for each column name in the array
-        headers.forEach((header, index) => {
-            const columnName = header.textContent.trim();
-            if (columnsToCheck.includes(columnName)) {
-                columnIndices[columnName] = index;
-            }
-        });
+		// Find the index for each column name in the array
+		headers.forEach((header, index) => {
+			const columnName = header.textContent.trim();
+			if (columnsToCheck.includes(columnName)) {
+				columnIndices[columnName] = index;
+			}
+		});
 
-        if (Object.keys(columnIndices).length === 0) return; // Exit if none of the columns are found
+		if (Object.keys(columnIndices).length === 0) return; // Exit if none of the columns are found
 
-        const rows = table.getElementsByTagName("tr");
+		const rows = table.getElementsByTagName("tr");
 
-        for (let i = 0; i < rows.length; i++) {
-            const cells = rows[i].getElementsByTagName("td");
+		for (let i = 0; i < rows.length; i++) {
+			const cells = rows[i].getElementsByTagName("td");
 
-            // Loop through each column that needs to be checked
-            for (const columnName of columnsToCheck) {
-                const columnIndex = columnIndices[columnName];
+			// Loop through each column that needs to be checked
+			for (const columnName of columnsToCheck) {
+				const columnIndex = columnIndices[columnName];
 
-                if (cells.length > columnIndex) {
-                    let cellText = cells[columnIndex].innerText;
+				if (cells.length > columnIndex) {
+					let cellText = cells[columnIndex].innerText;
 
-                    // If the cell text is longer than 30 characters, truncate and append "[...]"
-                    if (cellText.length > 30) {
-                        cellText = cellText.slice(0, 30) + "[...]";
-                        // Update the cell text
-                        cells[columnIndex].innerText = cellText;
-                    }
-                }
-            }
-        }
-    }
+					// If the cell text is longer than 30 characters, truncate and append "[...]"
+					if (cellText.length > 30) {
+						cellText = cellText.slice(0, 30) + "[...]";
+						// Update the cell text
+						cells[columnIndex].innerText = cellText;
+					}
+				}
+			}
+		}
+	}
+
+	function highlightRunnerDiff() {
+		// Get the table headers to find the relevant columns
+		const headers = document.querySelectorAll('#datatable_Report_Different_Runners th');
+		let tvgHorsesColIndex = -1;
+		let utRunnersColIndex = -1;
+
+		// Find column indices by looking at aria-label attributes
+		for (let i = 0; i < headers.length; i++) {
+			const ariaLabel = headers[i].getAttribute('aria-label');
+			if (ariaLabel && ariaLabel.includes('Number Of TVG Horses')) {
+				tvgHorsesColIndex = i + 1; // nth-child is 1-based
+			} else if (ariaLabel && ariaLabel.includes('Number Of UT Runners')) {
+				utRunnersColIndex = i + 1;
+			}
+		}
+
+		// Check if both columns were found
+		if (tvgHorsesColIndex === -1 || utRunnersColIndex === -1) {
+			console.log('Column indices not found:',
+						'TVG Horses:', tvgHorsesColIndex,
+						'UT Runners:', utRunnersColIndex);
+
+			// Debug: Print all column headers to see what's available
+			console.log('Available columns:');
+			headers.forEach((h, idx) => {
+				console.log(`${idx + 1}: ${h.getAttribute('aria-label')}`);
+			});
+			return;
+		}
+
+		// Get the tbody from the table
+		const tbody = document.querySelector('#datatable_Report_Different_Runners tbody');
+		if (!tbody) {
+			console.log('Tbody not found');
+			return;
+		}
+
+		// Loop through each row in the table body
+		const rows = tbody.querySelectorAll('tr');
+		let warningRows = 0;
+		let errorRows = 0;
+
+		for (let j = 0; j < rows.length; j++) {
+			const row = rows[j];
+
+			// Get the cells for both columns
+			const tvgHorsesCell = row.children[tvgHorsesColIndex - 1]; // Convert to 0-based for children
+			const utRunnersCell = row.children[utRunnersColIndex - 1];
+
+			if (tvgHorsesCell && utRunnersCell) {
+				// Get text content of UT Runners cell
+				const utRunnersText = utRunnersCell.textContent.trim();
+				// Check if UT Runners is blank
+				const isUtRunnersBlank = utRunnersText === '';
+
+				// Get the numeric values from the cells
+				const tvgHorsesCount = parseInt(tvgHorsesCell.textContent.trim(), 10) || 0;
+				const utRunnersCount = isUtRunnersBlank ? 0 : parseInt(utRunnersText, 10) || 0;
+
+				// Calculate absolute difference
+				const diff = Math.abs(tvgHorsesCount - utRunnersCount);
+
+				// Apply different highlight colors based on difference magnitude and blank status
+				if (diff === 1 || isUtRunnersBlank) {
+					// Yellow for difference of exactly 1 or blank UT Runners
+					tvgHorsesCell.style.backgroundColor = colorLevels.warning;
+					utRunnersCell.style.backgroundColor = colorLevels.warning;
+					warningRows++;
+				} else if (diff >= 2) {
+					// Red for difference of 2 or more (but not blank)
+					tvgHorsesCell.style.backgroundColor = colorLevels.error;
+					utRunnersCell.style.backgroundColor = colorLevels.error;
+					errorRows++;
+				}
+			}
+		}
+
+		console.log(`Runner difference check completed. Found ${warningRows} rows with difference of 1 or blank UT Runners, and ${errorRows} rows with difference >= 2.`);
+	}
 })();
