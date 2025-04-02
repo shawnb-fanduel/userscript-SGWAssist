@@ -51,7 +51,7 @@
 	}
 	if (location.href.toLowerCase().includes('reportdifferentrunners')) {
 		try {
-			highlightRunnerDiff();
+			fn_highlightRunnerDiff();
 		} catch (error) {
 			console.error('Error running highlightRunnerDiff:', error);
 		}
@@ -235,7 +235,7 @@
 		}
 	}
 
-	function highlightRunnerDiff() {
+	function fn_highlightRunnerDiff() {
 		// Get the table headers to find the relevant columns
 		const headers = document.querySelectorAll('#datatable_Report_Different_Runners th');
 		let tvgHorsesColIndex = -1;
@@ -252,16 +252,8 @@
 		}
 
 		// Check if both columns were found
-		if (tvgHorsesColIndex === -1 || utRunnersColIndex === -1) {
-			console.log('Column indices not found:',
-						'TVG Horses:', tvgHorsesColIndex,
-						'UT Runners:', utRunnersColIndex);
-
-			// Debug: Print all column headers to see what's available
-			console.log('Available columns:');
-			headers.forEach((h, idx) => {
-				console.log(`${idx + 1}: ${h.getAttribute('aria-label')}`);
-			});
+		if (tvgHorsesColIndex == -1 || utRunnersColIndex == -1) {
+			console.log('Column(s) not found:', 'TVG Horses:', tvgHorsesColIndex, 'UT Runners:', utRunnersColIndex);
 			return;
 		}
 
@@ -288,7 +280,7 @@
 				// Get text content of UT Runners cell
 				const utRunnersText = utRunnersCell.textContent.trim();
 				// Check if UT Runners is blank
-				const isUtRunnersBlank = utRunnersText === '';
+				const isUtRunnersBlank = utRunnersText == '';
 
 				// Get the numeric values from the cells
 				const tvgHorsesCount = parseInt(tvgHorsesCell.textContent.trim(), 10) || 0;
@@ -298,7 +290,7 @@
 				const diff = Math.abs(tvgHorsesCount - utRunnersCount);
 
 				// Apply different highlight colors based on difference magnitude and blank status
-				if (diff === 1 || isUtRunnersBlank) {
+				if (diff == 1 || isUtRunnersBlank) {
 					// Yellow for difference of exactly 1 or blank UT Runners
 					tvgHorsesCell.style.backgroundColor = colorLevels.warning;
 					utRunnersCell.style.backgroundColor = colorLevels.warning;
@@ -311,7 +303,6 @@
 				}
 			}
 		}
-
 		console.log(`Runner difference check completed. Found ${warningRows} rows with difference of 1 or blank UT Runners, and ${errorRows} rows with difference >= 2.`);
 	}
 })();
