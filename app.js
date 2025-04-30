@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.3.0
-// @description  Highlights problems in SGW
+// @version      0.4.0
+// @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*sgw.gcp-prod.tvg.com/*
 // @match        http*://*sgw.gcp-dev.tvg.com/*
@@ -47,6 +47,11 @@
 			fn_ShortenCells();
 		} catch (error) {
 			console.error('Error running fn_ShortenCells:', error);
+		}
+		try {
+			fn_highlightSpecialCardsConfigMissing();
+		} catch (error) {
+			console.error('Error running fn_highlightSpecialCardsConfigMissing:', error);
 		}
 	}
 	if (location.href.toLowerCase().includes('reportdifferentrunners')) {
@@ -304,5 +309,41 @@
 			}
 		}
 		console.log(`Runner difference check completed. Found ${warningRows} rows with difference of 1 or blank UT Runners, and ${errorRows} rows with difference >= 2.`);
+	}
+
+	function fn_highlightSpecialCardsConfigMissing() {
+		const table = document.querySelector('#datatable_TVG_Race_List'); // Target the correct table
+		if (!table) return; // Exit if the table is not found
+
+		const headers = table.querySelectorAll('th'); // Find all table header cells
+		let configColumnIndex = -1; // Initialize the column index to -1
+
+		// Loop through each header to find the "Special Cards Config" column
+		headers.forEach((header, index) => {
+			const headerText = header.textContent.trim().toLowerCase();
+			if (headerText.includes("special cards config")) {
+				configColumnIndex = index; // Store the index if found
+			}
+		});
+
+		if (configColumnIndex === -1) return; // Exit if the column is not found
+
+		const rows = table.querySelectorAll('tbody tr'); // Get all table rows
+
+		// Loop through each row to check the cell in the config column
+		rows.forEach(row => {
+			const cells = row.querySelectorAll('td'); // Get all cells in the row
+
+			if (cells.length > configColumnIndex) {
+				const cell = cells[configColumnIndex];
+				const link = cell.querySelector('a'); // Check for any anchor tag inside the cell
+				const linkText = link ? link.textContent.trim().toLowerCase() : "";
+
+				// If the link text includes "add new config", highlight the cell
+				if (linkText.includes('add new config')) {
+					cell.style.backgroundColor = colorLevels.warning; // Apply the warning color
+				}
+			}
+		});
 	}
 })();
