@@ -342,37 +342,58 @@
 	}
 
 	function fn_highlightSpecialCardsConfigMissing() {
-		const table = document.querySelector('#datatable_TVG_Race_List'); // Target the correct table
-		if (!table) return; // Exit if the table is not found
+		const table = document.querySelector('#datatable_TVG_Race_List');
+		if (!table) return;
 
-		const headers = table.querySelectorAll('th'); // Find all table header cells
-		let configColumnIndex = -1; // Initialize the column index to -1
+		const headers = table.querySelectorAll('thead th');
+		let configColIndex = -1;
+		let conditionsColIndex = -1;
 
-		// Loop through each header to find the "Special Cards Config" column
 		headers.forEach((header, index) => {
-			const headerText = header.textContent.trim().toLowerCase();
-			if (headerText.includes("special cards config")) {
-				configColumnIndex = index; // Store the index if found
-			}
+			const text = header.textContent.trim().toLowerCase();
+			if (text.includes("special cards config")) configColIndex = index;
+			if (text.includes("tvg race conditions")) conditionsColIndex = index;
 		});
 
-		if (configColumnIndex === -1) return; // Exit if the column is not found
+		if (configColIndex === -1 || conditionsColIndex === -1) return;
 
-		const rows = table.querySelectorAll('tbody tr'); // Get all table rows
+		// Insert new header after the config column
+		const headerRow = table.querySelector('thead tr');
+		const newHeader = document.createElement('th');
+		newHeader.textContent = "Race Ref";
+		headerRow.insertBefore(newHeader, headerRow.children[configColIndex + 1]);
 
-		// Loop through each row to check the cell in the config column
+		const rows = table.querySelectorAll('tbody tr');
+
 		rows.forEach(row => {
-			const cells = row.querySelectorAll('td'); // Get all cells in the row
+			const cells = row.querySelectorAll('td');
 
-			if (cells.length > configColumnIndex) {
-				const cell = cells[configColumnIndex];
-				const link = cell.querySelector('a'); // Check for any anchor tag inside the cell
+			// --- Highlight "Add New Config" Cells ---
+			if (cells.length > configColIndex) {
+				const configCell = cells[configColIndex];
+				const link = configCell.querySelector('a');
 				const linkText = link ? link.textContent.trim().toLowerCase() : "";
-
-				// If the link text includes "add new config", highlight the cell
 				if (linkText.includes('add new config')) {
-					cell.style.backgroundColor = colorLevels.warning; // Apply the warning color
+					configCell.style.backgroundColor = colorLevels.warning;
 				}
+			}
+
+			// --- Extract "IND R4" or similar from TVG Race Conditions ---
+			let raceRefText = "";
+			if (cells.length > conditionsColIndex) {
+				const conditionText = cells[conditionsColIndex].textContent.trim();
+				const match = conditionText.match(/^([A-Z]{2,4})\s*[-–]\s*(?:RACE|R)\s*([0-9]{1,2})/i);
+				if (match) {
+					raceRefText = `${match[1]} R${match[2]}`;
+				}
+			}
+
+			// --- Insert Race Ref Cell after config column ---
+			const newCell = document.createElement('td');
+			newCell.textContent = raceRefText;
+			row.insertBefore(newCell, cells[configColIndex + 1]);
+		});
+	}
 			}
 		});
 	}
