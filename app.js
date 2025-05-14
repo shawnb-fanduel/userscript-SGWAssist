@@ -65,41 +65,71 @@
 	// ALL FUNCTIONS
 	function fn_HighlightDates() {
 		try {
-			// Move everything into the try block to catch all potential errors
 			console.log('Highlight dates & times started');
 
-			const tbody = document.querySelector('#datatable_TVG_Race_List tbody');
+			const table = document.querySelector('#datatable_TVG_Race_List');
+			if (!table) {
+				console.log('Table not found');
+				return;
+			}
+
+			const headers = table.querySelectorAll('thead th');
+			let postTimeColIndex = -1;
+
+			headers.forEach((header, index) => {
+				const normalized = header.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+				if (normalized === 'tvg race post time') {
+					postTimeColIndex = index + 1; // nth-child is 1-based
+				}
+			});
+
+			if (postTimeColIndex === -1) {
+				console.warn('Could not find "TVG Race Post Time" column.');
+				return;
+			}
+
+			const tbody = table.querySelector('tbody');
 			if (!tbody) {
 				console.log('Tbody not found');
 				return;
 			}
 
-			const cardDate = document.querySelector('body > div.container-fluid > div:nth-child(1) > div > h6 > a:nth-child(1)').innerText.trim();
-			const rows = tbody.querySelectorAll("tr");
-			const today = new Date();
-			const todayDate = today.toISOString().slice(0, 10);
+			const cardDate = document.querySelector(
+				'body > div.container-fluid > div:nth-child(1) > div > h6 > a:nth-child(1)'
+			)?.innerText.trim();
 
-			rows.forEach(row => {
-				const cells = row.querySelectorAll("td:nth-child(8)"); // Adjust the column index as needed
-				cells.forEach(cell => {
+			const rows = Array.from(tbody.querySelectorAll("tr"));
+			let prevTime = null;
+
+			rows.forEach((row) => {
+				const cell = row.querySelector(`td:nth-child(${postTimeColIndex})`);
+				if (!cell) return;
+
 					const cellText = cell.textContent.trim();
+				if (!cellText) return;
 
+				const todayDate = new Date().toISOString().slice(0, 10);
 					if (cellText.includes(todayDate) && !cellText.includes(cardDate)) {
 						cell.style.backgroundColor = colorLevels.warning;
 					}
 
-					const timeString = cellText.split(' ')[1]; // Extracting the time part after the space
-					const timeParts = timeString.split(':');
+				const dateObj = new Date(cellText);
+				if (isNaN(dateObj)) return;
 
-					if (timeParts.length === 3) {
-						const hours = parseInt(timeParts[0], 10);
-						if (!isNaN(hours) && hours >= 2 && hours < 4) {
+				const hours = dateObj.getHours();
+				const minutes = dateObj.getMinutes();
+				const seconds = dateObj.getSeconds();
+				const timeInSeconds = hours * 3600 + minutes * 60 + seconds;
+
+				if (hours >= 2 && hours < 4) {
 							cell.style.backgroundColor = colorLevels.caution;
 						}
-					}
-				});
-			});
 
+				if (prevTime !== null && dateObj < prevTime) {
+					cell.style.backgroundColor = colorLevels.info;
+					}
+				prevTime = dateObj;
+			});
 		} catch (error) {
 			console.error('Error in fn_HighlightDates:', error);
 		}
