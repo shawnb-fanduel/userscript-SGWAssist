@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.4.0
+// @version      0.5.0
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*sgw.gcp-prod.tvg.com/*
@@ -382,7 +382,7 @@
 			let raceRefText = "";
 			if (cells.length > conditionsColIndex) {
 				const conditionText = cells[conditionsColIndex].textContent.trim();
-				const match = conditionText.match(/^([A-Z]{2,4})\s*[-–]\s*(?:RACE|R)\s*([0-9]{1,2})/i);
+			const match = conditionText.match(/\b([A-Z]{2,4})\s*[-–]\s*(?:RACE\s*)?R\s*([0-9]{1,2})\b/i);
 				if (match) {
 					raceRefText = `${match[1]} R${match[2]}`;
 				}
