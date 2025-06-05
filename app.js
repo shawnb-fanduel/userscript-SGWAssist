@@ -394,7 +394,114 @@
 			row.insertBefore(newCell, cells[configColIndex + 1]);
 		});
 	}
+
+	function fn_matchTrackRowsToSettings(trackSettings) {
+		const table = document.querySelector("#datatable_TVG_Card_List");
+		if (!table) return;
+
+		const headers = table.querySelectorAll("thead th");
+		const colIndex = {};
+
+		headers.forEach((th, i) => {
+			const label = th.getAttribute("aria-label") || "";
+			if (label.includes("TVG Track Code")) colIndex.tvg = i;
+			else if (label.includes("ITSP Track Code")) colIndex.itsp = i;
+			else if (label.includes("Track File Code")) colIndex.file = i;
+			else if (label.includes("Advance Code")) colIndex.adv = i;
+			else if (label.includes("TVG Stream Track Code")) colIndex.stream = i;
+			else if (label.includes("Replay Track Code")) colIndex.replay = i;
+		});
+
+		const rows = table.querySelectorAll("tbody tr");
+		const seenTVGCodes = new Set();
+
+		rows.forEach((row, rowIndex) => {
+			const tds = row.querySelectorAll("td");
+			if (tds.length === 0) return;
+
+			const tvgCell = tds[colIndex.tvg];
+			const itspCell = tds[colIndex.itsp];
+			const fileCell = tds[colIndex.file];
+			const advCell = colIndex.adv !== undefined ? tds[colIndex.adv] : null;
+			const streamCell = colIndex.stream !== undefined ? tds[colIndex.stream] : null;
+			const replayCell = colIndex.replay !== undefined ? tds[colIndex.replay] : null;
+
+			const tvgText = tvgCell?.innerText.trim() || "";
+			const itspText = itspCell?.innerText.trim() || "";
+			const fileText = fileCell?.innerText.trim() || "";
+			const advText = advCell?.innerText.trim() || "";
+			const streamText = streamCell?.innerText.trim() || "";
+			const replayText = replayCell?.innerText.trim() || "";
+
+			seenTVGCodes.add(tvgText);
+
+			const setting = trackSettings.find(s => tvgText === s.tvgTrackCode);
+			if (!setting) return;
+
+			let hasError = false;
+
+			// ITSP Code
+			if (itspText !== setting.itspTrackCode) {
+				itspCell.style.backgroundColor = colorLevels.error;
+				hasError = true;
+			} else {
+				itspCell.style.backgroundColor = colorLevels.success;
+			}
+
+			// Track File Code
+			if (fileText !== setting.trackFileCode) {
+				fileCell.style.backgroundColor = colorLevels.error;
+				hasError = true;
+			} else {
+				fileCell.style.backgroundColor = colorLevels.success;
+			}
+
+			// Advance Code
+			if (setting.advanceCode !== undefined && advCell) {
+				if (advText !== setting.advanceCode) {
+					advCell.style.backgroundColor = colorLevels.error;
+					hasError = true;
+				} else {
+					advCell.style.backgroundColor = colorLevels.success;
+				}
+			} else if (advCell) {
+				advCell.style.backgroundColor = "";
+			}
+
+			// Stream Track Code
+			if (setting.streamTrackCode !== undefined && streamCell) {
+				if (streamText !== setting.streamTrackCode) {
+					streamCell.style.backgroundColor = colorLevels.error;
+					hasError = true;
+				} else {
+					streamCell.style.backgroundColor = colorLevels.success;
+				}
+			}
+
+			// Replay Code
+			if (setting.replayCode !== undefined && replayCell) {
+				if (replayText !== setting.replayCode) {
+					replayCell.style.backgroundColor = colorLevels.error;
+					hasError = true;
+				} else {
+					replayCell.style.backgroundColor = colorLevels.success;
+				}
+			}
+
+			if (!hasError) {
+				console.log(`✅ Row ${rowIndex + 1} passed validation.`);
+			} else {
+				console.warn(`❌ Row ${rowIndex + 1} failed validation.`);
 			}
 		});
+
+		// Alert if any trackSettings didn't match any row
+		const unusedSettings = trackSettings
+			.filter(setting => !seenTVGCodes.has(setting.tvgTrackCode))
+			.map(s => s.tvgTrackCode);
+
+		if (unusedSettings.length > 0) {
+			alert("⚠️ These track settings were not matched to any row:\n" + unusedSettings.join(", "));
+		}
 	}
 })();
