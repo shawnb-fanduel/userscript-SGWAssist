@@ -17,7 +17,7 @@
 		warning: "#cca000",
 		caution: "#cc6600",
 		error: "#fe5f55",
-		success: "#00cc66",
+		success: "#008844",
 	};
 	const validTrackCodes = {
 		'GPX': ['GPM', 'GPT'],
