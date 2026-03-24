@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.5.0
+// @version      0.7.0
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
-// @match        http*://*sgw.gcp-prod.tvg.com/*
-// @match        http*://*sgw.gcp-dev.tvg.com/*
+// @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
-(function() {
+(function () {
 	'use strict';
 
 	// Settings
@@ -21,8 +22,15 @@
 	};
 	const validTrackCodes = {
 		'GPX': ['GPM', 'GPT'],
-		'LRX': ['LRM']
+		'LRX': ['LRM'],
+		'PRX': ['PIM']
 	};
+	const trackAssoc = {
+		'ArenaRC': ['GB - Ascot', 'GB - Bangor-on-Dee', 'GB - Bath', 'GB - Brighton', 'GB - Chepstow', 'GB - Chester', '	GB - Doncaster',
+			'GB - FFos Las', 'GB - Fontwell Park', 'GB - Hereford', 'GB - Hexham', 'GB - Lingfield', 'GB - Newbury', 'GB - Newcastle',
+			'GB - Newton Abbot', 'GB - Plumpton', 'GB - Ripon', 'GB - Sedgefield', 'GB - Southwell', 'GB - Uttoxeter', 'GB - Windsor',
+			'GB - Wolverhampton', 'GB - Worcester', 'GB - Yarmouth']
+	}
 
 	// Calls to functions wrapped in try-catch
 	if (location.href.toLowerCase().includes('tvgcardlist')) {
@@ -35,6 +43,17 @@
 			fn_ValidateTrackCodes();
 		} catch (error) {
 			console.error('Error running fn_ValidateTrackCodes:', error);
+		}
+		try {
+			initTrackSettingsManager()
+			fn_matchTrackRowsToSettings(window.customTrackSettings || []);
+		} catch (error) {
+			console.error('Error running fn_matchTrackRowsToSettings:', error);
+		}
+		try {
+			fn_saveTrackData();
+		} catch (error) {
+			console.error('Error running fn_saveTrackData:', error);
 		}
 	}
 	if (location.href.toLowerCase().includes('tvgcardid')) {
@@ -54,64 +73,66 @@
 			console.error('Error running fn_highlightSpecialCardsConfigMissing:', error);
 		}
 	}
+	if (location.href.toLowerCase().includes('racebettype')) {
+		// used to highlight PlacePickAll
+	}
 	if (location.href.toLowerCase().includes('reportdifferentrunners')) {
 		try {
 			fn_highlightRunnerDiff();
 		} catch (error) {
 			console.error('Error running highlightRunnerDiff:', error);
 		}
+		try {
+			fn_addTrackNameColumn();
+			fn_addCutOffTextButton();
+		} catch (error) {
+			console.error('Error running fn_addTrackNameColumn:', error);
+		}
+
 	}
 
 	// ALL FUNCTIONS
 	function fn_HighlightDates() {
 		try {
 			console.log('Highlight dates & times started');
-
 			const table = document.querySelector('#datatable_TVG_Race_List');
 			if (!table) {
 				console.log('Table not found');
 				return;
 			}
-
 			const headers = table.querySelectorAll('thead th');
 			let postTimeColIndex = -1;
-
 			headers.forEach((header, index) => {
 				const normalized = header.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
 				if (normalized === 'tvg race post time') {
 					postTimeColIndex = index + 1; // nth-child is 1-based
 				}
 			});
-
 			if (postTimeColIndex === -1) {
 				console.warn('Could not find "TVG Race Post Time" column.');
 				return;
 			}
-
 			const tbody = table.querySelector('tbody');
 			if (!tbody) {
 				console.log('Tbody not found');
 				return;
 			}
-
 			const cardDate = document.querySelector(
 				'body > div.container-fluid > div:nth-child(1) > div > h6 > a:nth-child(1)'
 			)?.innerText.trim();
-
 			const rows = Array.from(tbody.querySelectorAll("tr"));
 			let prevTime = null;
-
 			rows.forEach((row) => {
 				const cell = row.querySelector(`td:nth-child(${postTimeColIndex})`);
 				if (!cell) return;
 
-					const cellText = cell.textContent.trim();
+				const cellText = cell.textContent.trim();
 				if (!cellText) return;
 
 				const todayDate = new Date().toISOString().slice(0, 10);
-					if (cellText.includes(todayDate) && !cellText.includes(cardDate)) {
-						cell.style.backgroundColor = colorLevels.warning;
-					}
+				if (cellText.includes(todayDate) && !cellText.includes(cardDate)) {
+					cell.style.backgroundColor = colorLevels.warning;
+				}
 
 				const dateObj = new Date(cellText);
 				if (isNaN(dateObj)) return;
@@ -122,12 +143,12 @@
 				const timeInSeconds = hours * 3600 + minutes * 60 + seconds;
 
 				if (hours >= 2 && hours < 4) {
-							cell.style.backgroundColor = colorLevels.caution;
-						}
+					cell.style.backgroundColor = colorLevels.caution;
+				}
 
 				if (prevTime !== null && dateObj < prevTime) {
 					cell.style.backgroundColor = colorLevels.info;
-					}
+				}
 				prevTime = dateObj;
 			});
 		} catch (error) {
@@ -179,7 +200,6 @@
 	}
 
 	function fn_ValidateTrackCodes() {
-
 		// Find the index for the TVG Track Code column
 		const headers = document.querySelectorAll('#datatable_TVG_Card_List th');
 		let tvgTrackCodeColIndex = -1;
@@ -246,9 +266,7 @@
 		});
 
 		if (Object.keys(columnIndices).length === 0) return; // Exit if none of the columns are found
-
 		const rows = table.getElementsByTagName("tr");
-
 		for (let i = 0; i < rows.length; i++) {
 			const cells = rows[i].getElementsByTagName("td");
 
@@ -382,7 +400,7 @@
 			let raceRefText = "";
 			if (cells.length > conditionsColIndex) {
 				const conditionText = cells[conditionsColIndex].textContent.trim();
-			const match = conditionText.match(/\b([A-Z]{2,4})\s*[-–]\s*(?:RACE\s*)?R\s*([0-9]{1,2})\b/i);
+				const match = conditionText.match(/\b([A-Z]{2,4})\s*[-–]\s*(?:RACE\s*)?R\s*([0-9]{1,2})\b/i);
 				if (match) {
 					raceRefText = `${match[1]} R${match[2]}`;
 				}
@@ -504,4 +522,338 @@
 			alert("⚠️ These track settings were not matched to any row:\n" + unusedSettings.join(", "));
 		}
 	}
+
+	// add things to the page
+	function initTrackSettingsManager() {
+		const LOCAL_STORAGE_KEY = "customTrackSettings";
+
+		// Load custom settings from localStorage
+		let trackSettings = [];
+		try {
+			const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+			if (stored) {
+				trackSettings = JSON.parse(stored);
+				console.log("✅ Loaded saved trackSettings from localStorage");
+			}
+		} catch (e) {
+			console.error("❌ Failed to parse stored trackSettings:", e);
+		}
+
+		// Make available globally
+		window.customTrackSettings = trackSettings;
+
+		// Inject button if not already there
+		const buttonContainer = document.querySelector(".dt-buttons");
+		if (buttonContainer && !document.getElementById("loadTrackSettingsBtn")) {
+			const btn = document.createElement("button");
+			btn.id = "loadTrackSettingsBtn";
+			btn.className = "dt-button"; // match existing style
+			btn.textContent = "Load trackSettings";
+			buttonContainer.appendChild(btn);
+
+			btn.addEventListener("click", () => {
+				const input = prompt("Paste your updated trackSettings JSON:");
+
+				if (!input) return;
+
+				try {
+					const parsed = JSON.parse(input);
+					if (!Array.isArray(parsed)) throw new Error("Input must be a JSON array");
+
+					localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsed));
+					window.customTrackSettings = parsed;
+
+					alert("✅ New trackSettings saved. Reapplying settings...");
+					fn_matchTrackRowsToSettings(window.customTrackSettings || []);
+				} catch (err) {
+					alert("❌ Invalid JSON:\n" + err.message);
+				}
+			});
+		}
+	}
 })();
+
+
+
+// Function 1: Save track data with 30-day expiration
+function fn_saveTrackData() {
+	const table = document.querySelector("#datatable_TVG_Card_List");
+	if (!table) return;
+
+	const headers = table.querySelectorAll("thead th");
+	const colIndex = {};
+
+	headers.forEach((th, i) => {
+		const label = th.getAttribute("aria-label") || "";
+		if (label.includes("TVG Track Code")) colIndex.tvg = i;
+		else if (label.includes("Track Name")) colIndex.name = i;
+		else if (label.includes("ITSP Track Code")) colIndex.itsp = i;
+	});
+
+	if (colIndex.tvg === undefined || colIndex.name === undefined || colIndex.itsp === undefined) {
+		console.warn("Could not find all required columns for track data");
+		return;
+	}
+
+	// Get existing data from GM storage
+	let trackData = {};
+	try {
+		const stored = GM_getValue('sgw_track_data', '{}');
+		trackData = JSON.parse(stored);
+	} catch (e) {
+		console.error("Error parsing stored track data:", e);
+		trackData = {};
+	}
+
+	const now = Date.now();
+	const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+
+	// Clean out data older than 30 days
+	Object.keys(trackData).forEach(key => {
+		if (trackData[key].timestamp < thirtyDaysAgo) {
+			delete trackData[key];
+		}
+	});
+
+	// Extract new data from table
+	const tbody = table.querySelector("tbody");
+	if (tbody) {
+		const rows = tbody.querySelectorAll("tr");
+		rows.forEach(row => {
+			const cells = row.querySelectorAll("td");
+			if (cells.length > Math.max(colIndex.tvg, colIndex.name, colIndex.itsp)) {
+				const tvgCode = cells[colIndex.tvg]?.textContent.trim();
+				const trackName = cells[colIndex.name]?.textContent.trim();
+				const itspCode = cells[colIndex.itsp]?.textContent.trim();
+
+				if (tvgCode && trackName && itspCode) {
+					trackData[tvgCode] = {
+						tvgCode: tvgCode,
+						trackName: trackName,
+						itspCode: itspCode,
+						timestamp: now
+					};
+				}
+			}
+		});
+	}
+
+	// Save back to GM storage
+	try {
+		GM_setValue('sgw_track_data', JSON.stringify(trackData));
+		console.log(`Saved ${Object.keys(trackData).length} track entries`);
+	} catch (e) {
+		console.error("Error saving track data:", e);
+	}
+}
+
+// Function 2: Retrieve stored track data
+function fn_getTrackData(tvgCode = null) {
+	try {
+		const stored = GM_getValue('sgw_track_data', '{}');
+		const trackData = JSON.parse(stored);
+		const now = Date.now();
+		const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+
+		// Clean expired data
+		Object.keys(trackData).forEach(key => {
+			if (trackData[key].timestamp < thirtyDaysAgo) {
+				delete trackData[key];
+			}
+		});
+
+		if (tvgCode) {
+			return trackData[tvgCode] || null;
+		}
+
+		return trackData;
+	} catch (e) {
+		console.error("Error retrieving track data:", e);
+		return tvgCode ? null : {};
+	}
+}
+
+function fn_addTrackNameColumn() {
+	const table = document.querySelector("#datatable_Report_Different_Runners");
+	if (!table) {
+		console.warn("Different Runners table not found");
+		return;
+	}
+
+	// Get stored track data
+	const trackData = fn_getTrackData();
+
+	// Find the TVG Track Code column index
+	const headers = table.querySelectorAll("thead th");
+	let tvgCodeIndex = -1;
+
+	headers.forEach((th, i) => {
+		const text = th.textContent.trim();
+		if (text === "TVG Track Code") {
+			tvgCodeIndex = i;
+		}
+	});
+
+	if (tvgCodeIndex === -1) {
+		console.warn("TVG Track Code column not found");
+		return;
+	}
+
+	// Add header for Track Name column (insert after TVG Track Code)
+	const headerRow = table.querySelector("thead tr");
+	const newHeader = document.createElement("th");
+	newHeader.textContent = "Track Name";
+	newHeader.className = "sorting";
+	newHeader.tabIndex = 0;
+	newHeader.setAttribute("aria-controls", "datatable_Report_Different_Runners");
+	newHeader.setAttribute("rowspan", "1");
+	newHeader.setAttribute("colspan", "1");
+	newHeader.setAttribute("aria-label", "Track Name: activate to sort column ascending");
+
+	// Insert after TVG Track Code header
+	const tvgHeader = headers[tvgCodeIndex];
+	tvgHeader.parentNode.insertBefore(newHeader, tvgHeader.nextSibling);
+
+	// Add Track Name cells to each row
+	const tbody = table.querySelector("tbody");
+	if (tbody) {
+		const rows = tbody.querySelectorAll("tr");
+		rows.forEach(row => {
+			const cells = row.querySelectorAll("td");
+			if (cells.length > tvgCodeIndex) {
+				const tvgCode = cells[tvgCodeIndex].textContent.trim();
+				const trackInfo = trackData[tvgCode];
+
+				// Create new cell
+				const newCell = document.createElement("td");
+				if (trackInfo && trackInfo.trackName) {
+					newCell.textContent = trackInfo.trackName;
+				} else {
+					newCell.textContent = "—"; // Em dash for unknown
+					newCell.style.color = "#999";
+					newCell.title = "Track name not found in saved data";
+				}
+
+				// Insert after TVG Track Code cell
+				const tvgCell = cells[tvgCodeIndex];
+				tvgCell.parentNode.insertBefore(newCell, tvgCell.nextSibling);
+			}
+		});
+	}
+
+	console.log("Track Name column added to Different Runners report");
+}
+
+
+function fn_addCutOffTextButton() {
+	const buttonContainer = document.querySelector(".dt-buttons");
+	if (buttonContainer && !document.getElementById("createCutOffTextBtn")) {
+		const btn = document.createElement("button");
+		btn.id = "createCutOffTextBtn";
+		btn.className = "dt-button"; // match existing style
+		btn.textContent = "Create CutOff Text";
+		btn.onclick = function () {
+			fn_createCutOffText();
+		};
+		buttonContainer.appendChild(btn);
+		console.log("Create CutOff Text button added");
+	}
+}
+
+function fn_createCutOffText() {
+	const table = document.querySelector("#datatable_Report_Different_Runners");
+	if (!table) {
+		console.warn("Different Runners table not found");
+		return;
+	}
+
+	// Find column indexes
+	const headers = table.querySelectorAll("thead th");
+	let tvgCodeIndex = -1;
+	let trackNameIndex = -1;
+	let raceNumberIndex = -1;
+	let utRunnersIndex = -1;
+
+	headers.forEach((th, i) => {
+		const text = th.textContent.trim();
+		if (text === "TVG Track Code") tvgCodeIndex = i;
+		else if (text === "Track Name") trackNameIndex = i;
+		else if (text === "TVG Race Number") raceNumberIndex = i;
+		else if (text === "Number Of UT Runners") utRunnersIndex = i;
+	});
+
+	if (tvgCodeIndex === -1 || raceNumberIndex === -1 || utRunnersIndex === -1) {
+		console.warn("Required columns not found");
+		alert("Error: Could not find required columns in table");
+		return;
+	}
+
+	// Collect data by track
+	const trackMap = {};
+	const tbody = table.querySelector("tbody");
+	if (tbody) {
+		const rows = tbody.querySelectorAll("tr");
+		rows.forEach(row => {
+			const cells = row.querySelectorAll("td");
+			if (cells.length > Math.max(tvgCodeIndex, raceNumberIndex, utRunnersIndex)) {
+				const tvgCode = cells[tvgCodeIndex].textContent.trim();
+				const trackName = trackNameIndex !== -1 ? cells[trackNameIndex].textContent.trim() : tvgCode;
+				const raceNumber = parseInt(cells[raceNumberIndex].textContent.trim());
+				const utRunners = cells[utRunnersIndex].textContent.trim();
+
+				if (!trackMap[tvgCode]) {
+					trackMap[tvgCode] = {
+						trackName: trackName,
+						races: []
+					};
+				}
+
+				trackMap[tvgCode].races.push({
+					number: raceNumber,
+					hasUT: utRunners !== "" && utRunners !== "—"
+				});
+			}
+		});
+	}
+
+	// Generate cutoff text for each track
+	const outputLines = ["LATE NIGHT RACING:"];
+
+	Object.keys(trackMap).forEach(tvgCode => {
+		const track = trackMap[tvgCode];
+		track.races.sort((a, b) => a.number - b.number);
+
+		// Find the last race with UT runners
+		let lastOfferedRace = 0;
+		track.races.forEach(race => {
+			if (race.hasUT) {
+				lastOfferedRace = Math.max(lastOfferedRace, race.number);
+			}
+		});
+
+		if (lastOfferedRace > 0) {
+			let raceText;
+			if (lastOfferedRace === 1) {
+				raceText = "Race 1 offered";
+			} else {
+				raceText = `Races 1 - ${lastOfferedRace} offered`;
+			}
+
+			outputLines.push(`${track.trackName}; ${raceText}`);
+		}
+	});
+
+	// Join and copy to clipboard
+	const outputText = outputLines.join("\n");
+
+	// Copy to clipboard
+	navigator.clipboard.writeText(outputText).then(() => {
+		console.log("Cutoff text copied to clipboard:");
+		console.log(outputText);
+		alert("Cutoff text copied to clipboard!");
+	}).catch(err => {
+		console.error("Failed to copy to clipboard:", err);
+		// Fallback: show in alert
+		alert("Copy failed. Text:\n\n" + outputText);
+	});
+}
