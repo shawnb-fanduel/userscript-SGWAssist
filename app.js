@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.7.0
+// @version      0.7.1
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
+// @match        http*://racing-sgw.stg.use2.racing.fndlint.net/*
+// @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // ==/UserScript==
@@ -804,26 +806,39 @@ function fn_createCutOffText() {
 				if (!trackMap[tvgCode]) {
 					trackMap[tvgCode] = {
 						trackName: trackName,
-						races: []
+						races: [],
+						hasBlank: false
 					};
+				}
+
+				const isBlank = utRunners === "" || utRunners === "—";
+				if (isBlank) {
+					trackMap[tvgCode].hasBlank = true;
 				}
 
 				trackMap[tvgCode].races.push({
 					number: raceNumber,
-					hasUT: utRunners !== "" && utRunners !== "—"
+					hasUT: !isBlank
 				});
 			}
 		});
 	}
 
-	// Generate cutoff text for each track
+	// Generate cutoff text only for tracks with blanks
 	const outputLines = ["LATE NIGHT RACING:"];
+	const trackOutputs = [];
 
 	Object.keys(trackMap).forEach(tvgCode => {
 		const track = trackMap[tvgCode];
+
+		// Skip tracks that have no blanks
+		if (!track.hasBlank) {
+			return;
+		}
+
 		track.races.sort((a, b) => a.number - b.number);
 
-		// Find the last race with UT runners
+		// Find the last race with UT runners (before the blanks start)
 		let lastOfferedRace = 0;
 		track.races.forEach(race => {
 			if (race.hasUT) {
@@ -839,21 +854,34 @@ function fn_createCutOffText() {
 				raceText = `Races 1 - ${lastOfferedRace} offered`;
 			}
 
-			outputLines.push(`${track.trackName}; ${raceText}`);
+			trackOutputs.push(`${track.trackName}; ${raceText}`);
 		}
 	});
+
+	// Sort alphabetically by track name
+	trackOutputs.sort((a, b) => a.localeCompare(b));
+
+	// Add sorted tracks to output
+	outputLines.push(...trackOutputs);
 
 	// Join and copy to clipboard
 	const outputText = outputLines.join("\n");
 
-	// Copy to clipboard
-	navigator.clipboard.writeText(outputText).then(() => {
+	// Copy to clipboard using GM function
+	if (typeof GM_setClipboard !== 'undefined') {
+		GM_setClipboard(outputText);
 		console.log("Cutoff text copied to clipboard:");
 		console.log(outputText);
 		alert("Cutoff text copied to clipboard!");
-	}).catch(err => {
-		console.error("Failed to copy to clipboard:", err);
-		// Fallback: show in alert
-		alert("Copy failed. Text:\n\n" + outputText);
-	});
+	} else {
+		// Fallback to navigator.clipboard
+		navigator.clipboard.writeText(outputText).then(() => {
+			console.log("Cutoff text copied to clipboard:");
+			console.log(outputText);
+			alert("Cutoff text copied to clipboard!");
+		}).catch(err => {
+			console.error("Failed to copy to clipboard:", err);
+			alert("Copy failed. Text:\n\n" + outputText);
+		});
+	}
 }
