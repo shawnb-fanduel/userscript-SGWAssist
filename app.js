@@ -836,8 +836,15 @@ function fn_createCutOffText() {
 			return;
 		}
 
+
+		// Skip tracks that have no blanks
+		if (!track.hasBlank) {
+			return;
+		}
+
 		track.races.sort((a, b) => a.number - b.number);
 
+		// Find the last race with UT runners (before the blanks start)
 		// Find the last race with UT runners (before the blanks start)
 		let lastOfferedRace = 0;
 		track.races.forEach(race => {
@@ -855,8 +862,15 @@ function fn_createCutOffText() {
 			}
 
 			trackOutputs.push(`${track.trackName}; ${raceText}`);
+			trackOutputs.push(`${track.trackName}; ${raceText}`);
 		}
 	});
+
+	// Sort alphabetically by track name
+	trackOutputs.sort((a, b) => a.localeCompare(b));
+
+	// Add sorted tracks to output
+	outputLines.push(...trackOutputs);
 
 	// Sort alphabetically by track name
 	trackOutputs.sort((a, b) => a.localeCompare(b));
@@ -875,13 +889,13 @@ function fn_createCutOffText() {
 		alert("Cutoff text copied to clipboard!");
 	} else {
 		// Fallback to navigator.clipboard
-		navigator.clipboard.writeText(outputText).then(() => {
-			console.log("Cutoff text copied to clipboard:");
-			console.log(outputText);
-			alert("Cutoff text copied to clipboard!");
-		}).catch(err => {
-			console.error("Failed to copy to clipboard:", err);
-			alert("Copy failed. Text:\n\n" + outputText);
-		});
+	navigator.clipboard.writeText(outputText).then(() => {
+		console.log("Cutoff text copied to clipboard:");
+		console.log(outputText);
+		alert("Cutoff text copied to clipboard!");
+	}).catch(err => {
+		console.error("Failed to copy to clipboard:", err);
+		alert("Copy failed. Text:\n\n" + outputText);
+	});
 	}
 }
