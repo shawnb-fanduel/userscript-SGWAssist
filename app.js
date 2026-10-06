@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.9.1
+// @version      0.10.0
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
@@ -125,6 +125,13 @@
 			fn_addEnabledTracksButton()
 		} catch (error) {
 			console.error('Error running fn_listEnabledTracks:', error);
+		}
+	}
+	if (location.href.toLowerCase().includes('favoriteraces')) {
+		try {
+			fn_descriptionCharCounter();
+		} catch (error) {
+			console.error('Error running fn_descriptionCharCounter:', error);
 		}
 	}
 
@@ -277,6 +284,66 @@
 		} catch (error) {
 			console.error('Error in fn_HighlightDates:', error);
 		}
+	}
+
+    	function fn_descriptionCharCounter() {
+		console.log('[SGW Assist] fn_descriptionCharCounter started');
+		const MAX = 19; // must be < 20
+		const SEL = 'input[name="Description"]';
+
+		function getCounter(input) {
+			let counter = input.nextElementSibling;
+			if (counter && counter.classList.contains('sgw-char-counter')) return counter;
+
+			counter = document.createElement('small');
+			counter.className = 'sgw-char-counter';
+			counter.style.cssText = 'display:block; text-align:right; margin-top:2px;';
+			input.insertAdjacentElement('afterend', counter);
+			console.log('[SGW Assist] Char counter attached to', input);
+			return counter;
+		}
+
+		function update(input) {
+			const counter = getCounter(input);
+			const len = input.value.length;
+			const text = `${len} / ${MAX}`;
+			if (counter.textContent !== text) counter.textContent = text;
+			counter.style.color =
+				len > MAX ? colorLevels.error :
+				len >= MAX - 2 ? colorLevels.warning :
+				colorLevels.success;
+			counter.style.fontWeight = len > MAX ? 'bold' : 'normal';
+		}
+
+		const refreshAll = () => document.querySelectorAll(SEL).forEach(update);
+
+		// 1. Typing
+		document.addEventListener('input', e => {
+			if (e.target.matches?.(SEL)) update(e.target);
+		});
+
+		// 2. Edit link clicked -> formEdit() fills the field, then we refresh
+		document.addEventListener('click', e => {
+			const link = e.target.closest?.('a[onclick*="formEdit"]');
+			if (!link) return;
+			console.log('[SGW Assist] Edit clicked, waiting for modal');
+			[0, 50, 200, 500].forEach(ms => setTimeout(refreshAll, ms));
+		}, true);
+
+		// 3. Modal added or shown (class/style changes)
+		let pending = false;
+		new MutationObserver(() => {
+			if (pending) return;
+			pending = true;
+			requestAnimationFrame(() => { pending = false; refreshAll(); });
+		}).observe(document.body, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ['class', 'style'],
+		});
+
+		refreshAll();
 	}
 
 	// Function Definitions
