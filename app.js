@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.7.1
+// @version      0.9.1
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
+// @match        http*://racing-sgw.stg.use2.racing.fndlint.net/*
+// @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
 // @match        http*://racing-sgw.stg.use2.racing.fndlint.net/*
 // @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
 // @grant        GM_setValue
@@ -26,6 +28,22 @@
 		'GPX': ['GPM', 'GPT'],
 		'LRX': ['LRM'],
 		'PRX': ['PIM']
+	};
+    // Track File Code -> expected TVG Card TVG Track Name
+	const trackNameMap = {
+		// ARC
+		'ARCCHC': "CL - Club Hipico Concepcion (simulcast)",
+		'ARCVSC':  "CL - Valparaiso Sporting Club (simulcast)",
+		'ARCGVA': "BR - Gavea (simulcast)",
+		'ARCSI':  "AR - San Isidro (simulcast)",
+		'ARCCHS': "CL - Club Hipico Santiago (simulcast)",
+		'ARCCPR': "PA - Presidente Remon (simulcast)",
+		'ARCLAP': "UY - Las Piedras (simulcast)",
+		'ARCMRN': "UY - Maronas (simulcast)",
+
+		// South America (non-simulcast)
+		'CHLHCH': "CL - Hipodromo Chile",
+		'ARHAR':  "AR - Hipodromo Palermo",
 	};
 	const trackAssoc = {
 		'ArenaRC': ['GB - Ascot', 'GB - Bangor-on-Dee', 'GB - Bath', 'GB - Brighton', 'GB - Chepstow', 'GB - Chester', '	GB - Doncaster',
@@ -56,6 +74,16 @@
 			fn_saveTrackData();
 		} catch (error) {
 			console.error('Error running fn_saveTrackData:', error);
+		}
+        try {
+			fn_validateTrackNamesToFileCodes();
+		} catch (error) {
+			console.error('Error running fn_validateTrackNamesToFileCodes:', error);
+		}
+        try {
+			fn_autoFillTrackName();
+		} catch (error) {
+			console.error('Error running fn_autoFillTrackName:', error);
 		}
 	}
 	if (location.href.toLowerCase().includes('tvgcardid')) {
@@ -92,8 +120,101 @@
 		}
 
 	}
+	if (location.href.toLowerCase().includes('dailyoverrideswp')) {
+		try {
+			fn_addEnabledTracksButton()
+		} catch (error) {
+			console.error('Error running fn_listEnabledTracks:', error);
+		}
+	}
+
 
 	// ALL FUNCTIONS
+	function fn_autoFillTrackName() {
+		const SPAN_ID = 'select2-AxcisTrackCode-container';
+		let lastAutoValue = '';
+		let lastSelection = '';
+
+		function apply() {
+			const span = document.getElementById(SPAN_ID);
+			const input = document.getElementById('TVGCardTVGTrackName');
+			if (!span || !input) return;
+
+			const selected = (span.getAttribute('title') || span.textContent || '').trim();
+			if (!selected || selected === lastSelection) return;
+			lastSelection = selected;
+
+						// was: const match = trackNameMap.find(([re]) => re.test(selected));
+			const code = selected.split(/\s/)[0].toUpperCase();
+			const expectedName = trackNameMap[code];
+			if (!expectedName) return;
+
+            input.value = expectedName;
+			lastAutoValue = expectedName;
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+			console.log(`Auto-filled TVG Card Track Name: "${expectedName}" (from "${selected}")`);
+		}
+
+		const observer = new MutationObserver(apply);
+		observer.observe(document.body, {
+			subtree: true,
+			childList: true,
+			attributes: true,
+			attributeFilter: ['title'],
+		});
+		apply();
+	}
+
+    	function fn_validateTrackNamesToFileCodes() {
+		const table = document.querySelector('#datatable_TVG_Card_List');
+		if (!table) return;
+
+		const colIndex = {};
+		table.querySelectorAll('thead th').forEach((th, i) => {
+			const label = th.getAttribute('aria-label') || '';
+			if (label.startsWith('TVG Card TVG Track Name')) colIndex.name = i;
+			else if (label.startsWith('Track File Code')) colIndex.file = i;
+		});
+		if (colIndex.name === undefined || colIndex.file === undefined) {
+			console.warn('Track Name or Track File Code column not found');
+			return;
+		}
+
+		// Reverse lookup: name -> code
+		const nameToCode = {};
+		Object.entries(trackNameMap).forEach(([code, name]) => { nameToCode[name] = code; });
+
+		let mismatches = 0;
+		table.querySelectorAll('tbody tr').forEach(row => {
+			const tds = row.querySelectorAll('td');
+			const nameCell = tds[colIndex.name];
+			const fileCell = tds[colIndex.file];
+			if (!nameCell || !fileCell) return;
+
+			const name = nameCell.textContent.trim();
+			const file = fileCell.textContent.trim().toUpperCase();
+			const expectedName = trackNameMap[file];
+			const expectedCode = nameToCode[name];
+
+			let problem = '';
+			if (expectedName && name !== expectedName) {
+				problem = `File code ${file} expects name: "${expectedName}"`;
+			} else if (expectedCode && expectedCode !== file) {
+				problem = `Name "${name}" expects file code: ${expectedCode}`;
+			}
+
+			if (problem) {
+				[nameCell, fileCell].forEach(cell => {
+					cell.style.setProperty('background-color', colorLevels.error, 'important');
+					cell.title = problem;
+				});
+				mismatches++;
+			}
+		});
+		console.log(`Track name/file code check: ${mismatches} mismatch(es)`);
+	}
+
 	function fn_HighlightDates() {
 		try {
 			console.log('Highlight dates & times started');
@@ -290,76 +411,64 @@
 		}
 	}
 
-	function fn_highlightRunnerDiff() {
-		// Get the table headers to find the relevant columns
-		const headers = document.querySelectorAll('#datatable_Report_Different_Runners th');
-		let tvgHorsesColIndex = -1;
-		let utRunnersColIndex = -1;
-
-		// Find column indices by looking at aria-label attributes
-		for (let i = 0; i < headers.length; i++) {
-			const ariaLabel = headers[i].getAttribute('aria-label');
-			if (ariaLabel && ariaLabel.includes('Number Of TVG Horses')) {
-				tvgHorsesColIndex = i + 1; // nth-child is 1-based
-			} else if (ariaLabel && ariaLabel.includes('Number Of UT Runners')) {
-				utRunnersColIndex = i + 1;
-			}
-		}
-
-		// Check if both columns were found
-		if (tvgHorsesColIndex == -1 || utRunnersColIndex == -1) {
-			console.log('Column(s) not found:', 'TVG Horses:', tvgHorsesColIndex, 'UT Runners:', utRunnersColIndex);
-			return;
-		}
-
-		// Get the tbody from the table
-		const tbody = document.querySelector('#datatable_Report_Different_Runners tbody');
-		if (!tbody) {
-			console.log('Tbody not found');
-			return;
-		}
-
-		// Loop through each row in the table body
-		const rows = tbody.querySelectorAll('tr');
-		let warningRows = 0;
-		let errorRows = 0;
-
-		for (let j = 0; j < rows.length; j++) {
-			const row = rows[j];
-
-			// Get the cells for both columns
-			const tvgHorsesCell = row.children[tvgHorsesColIndex - 1]; // Convert to 0-based for children
-			const utRunnersCell = row.children[utRunnersColIndex - 1];
-
-			if (tvgHorsesCell && utRunnersCell) {
-				// Get text content of UT Runners cell
-				const utRunnersText = utRunnersCell.textContent.trim();
-				// Check if UT Runners is blank
-				const isUtRunnersBlank = utRunnersText == '';
-
-				// Get the numeric values from the cells
-				const tvgHorsesCount = parseInt(tvgHorsesCell.textContent.trim(), 10) || 0;
-				const utRunnersCount = isUtRunnersBlank ? 0 : parseInt(utRunnersText, 10) || 0;
-
-				// Calculate absolute difference
-				const diff = Math.abs(tvgHorsesCount - utRunnersCount);
-
-				// Apply different highlight colors based on difference magnitude and blank status
-				if (diff == 1 || isUtRunnersBlank) {
-					// Yellow for difference of exactly 1 or blank UT Runners
-					tvgHorsesCell.style.backgroundColor = colorLevels.warning;
-					utRunnersCell.style.backgroundColor = colorLevels.warning;
-					warningRows++;
-				} else if (diff >= 2) {
-					// Red for difference of 2 or more (but not blank)
-					tvgHorsesCell.style.backgroundColor = colorLevels.error;
-					utRunnersCell.style.backgroundColor = colorLevels.error;
-					errorRows++;
-				}
-			}
-		}
-		console.log(`Runner difference check completed. Found ${warningRows} rows with difference of 1 or blank UT Runners, and ${errorRows} rows with difference >= 2.`);
-	}
+    function fn_highlightRunnerDiff() {
+        // Get the table headers to find the relevant columns
+        const headers = document.querySelectorAll('#datatable_Report_Different_Runners th');
+        let tvgHorsesColIndex = -1;
+        let utRunnersColIndex = -1;
+        // Find column indices by looking at aria-label attributes
+        for (let i = 0; i < headers.length; i++) {
+            const ariaLabel = headers[i].getAttribute('aria-label');
+            if (ariaLabel && ariaLabel.includes('Number Of TVG Horses')) {
+                tvgHorsesColIndex = i + 1; // nth-child is 1-based
+            } else if (ariaLabel && ariaLabel.includes('Number Of UT Runners')) {
+                utRunnersColIndex = i + 1;
+            }
+        }
+        // Check if both columns were found
+        if (tvgHorsesColIndex == -1 || utRunnersColIndex == -1) {
+            console.log('Column(s) not found:', 'TVG Horses:', tvgHorsesColIndex, 'UT Runners:', utRunnersColIndex);
+            return;
+        }
+        // Get the tbody from the table
+        const tbody = document.querySelector('#datatable_Report_Different_Runners tbody');
+        if (!tbody) {
+            console.log('Tbody not found');
+            return;
+        }
+        // Loop through each row in the table body
+        const rows = tbody.querySelectorAll('tr');
+        let warningRows = 0;
+        let errorRows = 0;
+        for (let j = 0; j < rows.length; j++) {
+            const row = rows[j];
+            // Get the cells for both columns
+            const tvgHorsesCell = row.children[tvgHorsesColIndex - 1]; // Convert to 0-based for children
+            const utRunnersCell = row.children[utRunnersColIndex - 1];
+            if (tvgHorsesCell && utRunnersCell) {
+                // Get text content of UT Runners cell
+                const utRunnersText = utRunnersCell.textContent.trim();
+                // Check if UT Runners is blank
+                const isUtRunnersBlank = utRunnersText == '';
+                // Get the numeric values from the cells
+                const tvgHorsesCount = parseInt(tvgHorsesCell.textContent.trim(), 10) || 0;
+                const utRunnersCount = isUtRunnersBlank ? 0 : parseInt(utRunnersText, 10) || 0;
+                // Calculate absolute difference
+                const diff = Math.abs(tvgHorsesCount - utRunnersCount);
+                // Apply different highlight colors to entire row based on difference magnitude and blank status
+                if (diff == 1 || isUtRunnersBlank) {
+                    // Yellow for difference of exactly 1 or blank UT Runners
+                    row.style.setProperty('background-color', colorLevels.warning, 'important');
+                    warningRows++;
+                } else if (diff >= 2) {
+                    // Red for difference of 2 or more (but not blank)
+                    row.style.setProperty('background-color', colorLevels.error, 'important');
+                    errorRows++;
+                }
+            }
+        }
+        console.log(`Runner difference check completed. Found ${warningRows} rows with difference of 1 or blank UT Runners, and ${errorRows} rows with difference >= 2.`);
+    }
 
 	function fn_highlightSpecialCardsConfigMissing() {
 		const table = document.querySelector('#datatable_TVG_Race_List');
@@ -415,115 +524,109 @@
 		});
 	}
 
-	function fn_matchTrackRowsToSettings(trackSettings) {
-		const table = document.querySelector("#datatable_TVG_Card_List");
-		if (!table) return;
-
-		const headers = table.querySelectorAll("thead th");
-		const colIndex = {};
-
-		headers.forEach((th, i) => {
-			const label = th.getAttribute("aria-label") || "";
-			if (label.includes("TVG Track Code")) colIndex.tvg = i;
-			else if (label.includes("ITSP Track Code")) colIndex.itsp = i;
-			else if (label.includes("Track File Code")) colIndex.file = i;
-			else if (label.includes("Advance Code")) colIndex.adv = i;
-			else if (label.includes("TVG Stream Track Code")) colIndex.stream = i;
-			else if (label.includes("Replay Track Code")) colIndex.replay = i;
-		});
-
-		const rows = table.querySelectorAll("tbody tr");
-		const seenTVGCodes = new Set();
-
-		rows.forEach((row, rowIndex) => {
-			const tds = row.querySelectorAll("td");
-			if (tds.length === 0) return;
-
-			const tvgCell = tds[colIndex.tvg];
-			const itspCell = tds[colIndex.itsp];
-			const fileCell = tds[colIndex.file];
-			const advCell = colIndex.adv !== undefined ? tds[colIndex.adv] : null;
-			const streamCell = colIndex.stream !== undefined ? tds[colIndex.stream] : null;
-			const replayCell = colIndex.replay !== undefined ? tds[colIndex.replay] : null;
-
-			const tvgText = tvgCell?.innerText.trim() || "";
-			const itspText = itspCell?.innerText.trim() || "";
-			const fileText = fileCell?.innerText.trim() || "";
-			const advText = advCell?.innerText.trim() || "";
-			const streamText = streamCell?.innerText.trim() || "";
-			const replayText = replayCell?.innerText.trim() || "";
-
-			seenTVGCodes.add(tvgText);
-
-			const setting = trackSettings.find(s => tvgText === s.tvgTrackCode);
-			if (!setting) return;
-
-			let hasError = false;
-
-			// ITSP Code
-			if (itspText !== setting.itspTrackCode) {
-				itspCell.style.backgroundColor = colorLevels.error;
-				hasError = true;
-			} else {
-				itspCell.style.backgroundColor = colorLevels.success;
-			}
-
-			// Track File Code
-			if (fileText !== setting.trackFileCode) {
-				fileCell.style.backgroundColor = colorLevels.error;
-				hasError = true;
-			} else {
-				fileCell.style.backgroundColor = colorLevels.success;
-			}
-
-			// Advance Code
-			if (setting.advanceCode !== undefined && advCell) {
-				if (advText !== setting.advanceCode) {
-					advCell.style.backgroundColor = colorLevels.error;
-					hasError = true;
-				} else {
-					advCell.style.backgroundColor = colorLevels.success;
-				}
-			} else if (advCell) {
-				advCell.style.backgroundColor = "";
-			}
-
-			// Stream Track Code
-			if (setting.streamTrackCode !== undefined && streamCell) {
-				if (streamText !== setting.streamTrackCode) {
-					streamCell.style.backgroundColor = colorLevels.error;
-					hasError = true;
-				} else {
-					streamCell.style.backgroundColor = colorLevels.success;
-				}
-			}
-
-			// Replay Code
-			if (setting.replayCode !== undefined && replayCell) {
-				if (replayText !== setting.replayCode) {
-					replayCell.style.backgroundColor = colorLevels.error;
-					hasError = true;
-				} else {
-					replayCell.style.backgroundColor = colorLevels.success;
-				}
-			}
-
-			if (!hasError) {
-				console.log(`✅ Row ${rowIndex + 1} passed validation.`);
-			} else {
-				console.warn(`❌ Row ${rowIndex + 1} failed validation.`);
-			}
-		});
-
-		// Alert if any trackSettings didn't match any row
-		const unusedSettings = trackSettings
-			.filter(setting => !seenTVGCodes.has(setting.tvgTrackCode))
-			.map(s => s.tvgTrackCode);
-
-		if (unusedSettings.length > 0) {
-			alert("⚠️ These track settings were not matched to any row:\n" + unusedSettings.join(", "));
-		}
-	}
+    function fn_matchTrackRowsToSettings(trackSettings) {
+        const table = document.querySelector("#datatable_TVG_Card_List");
+        if (!table) return;
+        const headers = table.querySelectorAll("thead th");
+        const colIndex = {};
+        headers.forEach((th, i) => {
+            const label = th.getAttribute("aria-label") || "";
+            if (label.includes("TVG Track Code")) colIndex.tvg = i;
+            else if (label.includes("ITSP Track Code")) colIndex.itsp = i;
+            else if (label.includes("Track File Code")) colIndex.file = i;
+            else if (label.includes("Advance Code")) colIndex.adv = i;
+            else if (label.includes("TVG Stream Track Code")) colIndex.stream = i;
+            else if (label.includes("Replay Track Code")) colIndex.replay = i;
+        });
+        const rows = table.querySelectorAll("tbody tr");
+        const seenTVGCodes = new Set();
+        rows.forEach((row, rowIndex) => {
+            const tds = row.querySelectorAll("td");
+            if (tds.length === 0) return;
+            const tvgCell = tds[colIndex.tvg];
+            const itspCell = tds[colIndex.itsp];
+            const fileCell = tds[colIndex.file];
+            const advCell = colIndex.adv !== undefined ? tds[colIndex.adv] : null;
+            const streamCell = colIndex.stream !== undefined ? tds[colIndex.stream] : null;
+            const replayCell = colIndex.replay !== undefined ? tds[colIndex.replay] : null;
+            const tvgText = tvgCell?.innerText.trim() || "";
+            const itspText = itspCell?.innerText.trim() || "";
+            const fileText = fileCell?.innerText.trim() || "";
+            const advText = advCell?.innerText.trim() || "";
+            const streamText = streamCell?.innerText.trim() || "";
+            const replayText = replayCell?.innerText.trim() || "";
+            seenTVGCodes.add(tvgText);
+            const setting = trackSettings.find(s => tvgText === s.tvgTrackCode);
+            if (!setting) return;
+            let hasError = false;
+            // ITSP Code
+            if (itspText !== setting.itspTrackCode) {
+                itspCell.style.backgroundColor = colorLevels.error;
+                itspCell.title = `Expected: ${setting.itspTrackCode}`;
+                hasError = true;
+            } else {
+                itspCell.style.backgroundColor = colorLevels.success;
+                itspCell.title = "";
+            }
+            // Track File Code
+            if (fileText !== setting.trackFileCode) {
+                fileCell.style.backgroundColor = colorLevels.error;
+                fileCell.title = `Expected: ${setting.trackFileCode}`;
+                hasError = true;
+            } else {
+                fileCell.style.backgroundColor = colorLevels.success;
+                fileCell.title = "";
+            }
+            // Advance Code
+            if (setting.advanceCode !== undefined && advCell) {
+                if (advText !== setting.advanceCode) {
+                    advCell.style.backgroundColor = colorLevels.error;
+                    advCell.title = `Expected: ${setting.advanceCode}`;
+                    hasError = true;
+                } else {
+                    advCell.style.backgroundColor = colorLevels.success;
+                    advCell.title = "";
+                }
+            } else if (advCell) {
+                advCell.style.backgroundColor = "";
+                advCell.title = "";
+            }
+            // Stream Track Code
+            if (setting.streamTrackCode !== undefined && streamCell) {
+                if (streamText !== setting.streamTrackCode) {
+                    streamCell.style.backgroundColor = colorLevels.error;
+                    streamCell.title = `Expected: ${setting.streamTrackCode}`;
+                    hasError = true;
+                } else {
+                    streamCell.style.backgroundColor = colorLevels.success;
+                    streamCell.title = "";
+                }
+            }
+            // Replay Code
+            if (setting.replayCode !== undefined && replayCell) {
+                if (replayText !== setting.replayCode) {
+                    replayCell.style.backgroundColor = colorLevels.error;
+                    replayCell.title = `Expected: ${setting.replayCode}`;
+                    hasError = true;
+                } else {
+                    replayCell.style.backgroundColor = colorLevels.success;
+                    replayCell.title = "";
+                }
+            }
+            if (!hasError) {
+                console.log(`✅ Row ${rowIndex + 1} passed validation.`);
+            } else {
+                console.warn(`❌ Row ${rowIndex + 1} failed validation.`);
+            }
+        });
+        // Alert if any trackSettings didn't match any row
+        const unusedSettings = trackSettings
+        .filter(setting => !seenTVGCodes.has(setting.tvgTrackCode))
+        .map(s => s.tvgTrackCode);
+        if (unusedSettings.length > 0) {
+            alert("⚠️ These track settings were not matched to any row:\n" + unusedSettings.join(", "));
+        }
+    }
 
 	// add things to the page
 	function initTrackSettingsManager() {
@@ -889,13 +992,104 @@ function fn_createCutOffText() {
 		alert("Cutoff text copied to clipboard!");
 	} else {
 		// Fallback to navigator.clipboard
-	navigator.clipboard.writeText(outputText).then(() => {
-		console.log("Cutoff text copied to clipboard:");
-		console.log(outputText);
-		alert("Cutoff text copied to clipboard!");
-	}).catch(err => {
-		console.error("Failed to copy to clipboard:", err);
-		alert("Copy failed. Text:\n\n" + outputText);
+		navigator.clipboard.writeText(outputText).then(() => {
+			console.log("Cutoff text copied to clipboard:");
+			console.log(outputText);
+			alert("Cutoff text copied to clipboard!");
+		}).catch(err => {
+			console.error("Failed to copy to clipboard:", err);
+			alert("Copy failed. Text:\n\n" + outputText);
+		});
+	}
+}
+
+
+function fn_addEnabledTracksButton() {
+	const buttonContainer = document.querySelector(".dt-buttons");
+	if (buttonContainer && !document.getElementById("listEnabledTracksBtn")) {
+		const btn = document.createElement("button");
+		btn.id = "listEnabledTracksBtn";
+		btn.className = "dt-button";
+		btn.textContent = "List Enabled Tracks";
+		btn.onclick = function () {
+			fn_listEnabledTracks();
+		};
+		buttonContainer.appendChild(btn);
+		console.log("List Enabled Tracks button added");
+	}
+}
+
+function fn_listEnabledTracks() {
+	const table = document.querySelector("#datatable_Daily_Overrides__Wager_Profile");
+	if (!table) {
+		console.warn("TVG Card List table not found");
+		return;
+	}
+
+	// Find column indexes
+	const headers = table.querySelectorAll("thead th");
+	let trackNameIndex = -1;
+	let tvgCodeIndex = -1;
+	let isActiveIndex = -1;
+
+	headers.forEach((th, i) => {
+		const label = th.getAttribute("aria-label") || "";
+		if (label.includes("Track Name")) trackNameIndex = i;
+		else if (label.includes("TVG Track Code")) tvgCodeIndex = i;
+		else if (label.includes("TVG Card Wager Profile Track Is Active")) isActiveIndex = i;
 	});
+
+	if (trackNameIndex === -1 || isActiveIndex === -1) {
+		console.warn("Required columns not found");
+		alert("Error: Could not find required columns in table");
+		return;
+	}
+
+	// Collect enabled tracks
+	const enabledTracks = [];
+	const tbody = table.querySelector("tbody");
+	if (tbody) {
+		const rows = tbody.querySelectorAll("tr");
+		rows.forEach(row => {
+			const cells = row.querySelectorAll("td");
+			if (cells.length > Math.max(trackNameIndex, isActiveIndex)) {
+				const trackName = cells[trackNameIndex].textContent.trim();
+				const tvgCode = tvgCodeIndex !== -1 ? cells[tvgCodeIndex].textContent.trim() : "";
+				const isActiveCell = cells[isActiveIndex];
+
+				// Check if the cell contains "Enabled" text in the label
+				const label = isActiveCell.querySelector("label");
+				if (label && label.textContent.trim() === "Enabled") {
+					// Also check if the checkbox is actually checked
+					const checkbox = isActiveCell.querySelector("input[type='checkbox']");
+					if (checkbox && checkbox.checked) {
+						enabledTracks.push(trackName);
+					}
+				}
+			}
+		});
+	}
+
+	// Sort alphabetically
+	enabledTracks.sort((a, b) => a.localeCompare(b));
+
+	// Create output text (one track per line)
+	const outputText = enabledTracks.join("\n");
+
+	// Copy to clipboard
+	if (typeof GM_setClipboard !== 'undefined') {
+		GM_setClipboard(outputText);
+		console.log("Enabled tracks copied to clipboard:");
+		console.log(outputText);
+		alert(`${enabledTracks.length} enabled tracks copied to clipboard!`);
+	} else {
+		navigator.clipboard.writeText(outputText).then(() => {
+			console.log("Enabled tracks copied to clipboard:");
+			console.log(outputText);
+			alert(`${enabledTracks.length} enabled tracks copied to clipboard!`);
+		}).catch(err => {
+			console.error("Failed to copy to clipboard:", err);
+			alert("Copy failed. Tracks:\n\n" + outputText);
+		});
 	}
 }
