@@ -9,6 +9,7 @@
 // @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
 // @match        http*://racing-sgw.stg.use2.racing.fndlint.net/*
 // @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
+// @downloadURL  https://raw.githubusercontent.com/shawnb-fanduel/userscript-SGWAssist/refs/heads/main/app.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // ==/UserScript==
