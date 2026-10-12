@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.10.0
+// @version      0.10.1
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
@@ -43,8 +43,8 @@
 		'ARCMRN': "UY - Maronas (simulcast)",
 
 		// South America (non-simulcast)
-		'CHLHCH': "CL - Hipodromo Chile",
-		'ARHAR':  "AR - Hipodromo Palermo",
+		'RASCHHCH': "CL - Hipodromo Chile",
+		'RASARPAL':  "AR - Hipodromo Palermo",
 	};
 	const trackAssoc = {
 		'ArenaRC': ['GB - Ascot', 'GB - Bangor-on-Dee', 'GB - Bath', 'GB - Brighton', 'GB - Chepstow', 'GB - Chester', '	GB - Doncaster',
@@ -289,7 +289,7 @@
 
     	function fn_descriptionCharCounter() {
 		console.log('[SGW Assist] fn_descriptionCharCounter started');
-		const MAX = 19; // must be < 20
+		const MAX = 20; // must be < 20
 		const SEL = 'input[name="Description"]';
 
 		function getCounter(input) {
