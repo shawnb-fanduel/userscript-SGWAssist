@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.10.1
+// @version      0.10.2
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
@@ -1016,7 +1016,6 @@ function fn_createCutOffText() {
 		track.races.sort((a, b) => a.number - b.number);
 
 		// Find the last race with UT runners (before the blanks start)
-		// Find the last race with UT runners (before the blanks start)
 		let lastOfferedRace = 0;
 		track.races.forEach(race => {
 			if (race.hasUT) {
@@ -1033,15 +1032,8 @@ function fn_createCutOffText() {
 			}
 
 			trackOutputs.push(`${track.trackName}; ${raceText}`);
-			trackOutputs.push(`${track.trackName}; ${raceText}`);
 		}
 	});
-
-	// Sort alphabetically by track name
-	trackOutputs.sort((a, b) => a.localeCompare(b));
-
-	// Add sorted tracks to output
-	outputLines.push(...trackOutputs);
 
 	// Sort alphabetically by track name
 	trackOutputs.sort((a, b) => a.localeCompare(b));
@@ -1055,14 +1047,10 @@ function fn_createCutOffText() {
 	// Copy to clipboard using GM function
 	if (typeof GM_setClipboard !== 'undefined') {
 		GM_setClipboard(outputText);
-		console.log("Cutoff text copied to clipboard:");
-		console.log(outputText);
 		alert("Cutoff text copied to clipboard!");
 	} else {
 		// Fallback to navigator.clipboard
 		navigator.clipboard.writeText(outputText).then(() => {
-			console.log("Cutoff text copied to clipboard:");
-			console.log(outputText);
 			alert("Cutoff text copied to clipboard!");
 		}).catch(err => {
 			console.error("Failed to copy to clipboard:", err);
