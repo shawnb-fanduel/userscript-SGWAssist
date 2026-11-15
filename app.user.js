@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.10.2
+// @version      0.10.3
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
@@ -26,7 +26,10 @@
 		success: "#008844",
 	};
 	const validTrackCodes = {
-		'GPX': ['GPM', 'GPT'],
+		'GPX': [
+			{ code: 'GPT', from: '2026-05-01', to: '2026-11-25' },
+			{ code: 'GPM', from: '2026-11-26', to: '2026-12-31' }
+		],
 		'LRX': ['LRM'],
 		'PRX': ['PIM']
 	};
@@ -417,6 +420,8 @@
 			return;
 		}
 
+		const cardDate = fn_getCardDate();
+
 		// Loop through each row in the table body
 		const rows = tbody.querySelectorAll("tr");
 		rows.forEach(row => {
@@ -428,16 +433,39 @@
 				const tvgTrackCode = tvgTrackCodeCell.textContent.trim();
 				const itspTrackCode = itspTrackCodeCell.textContent.trim();
 
-				// Check if the TVG Track Code exists in the configuration object
-				if (validTrackCodes[tvgTrackCode]) {
-					// Validate if ITSP Track Code is in the allowed list for this TVG Track Code
-					if (!validTrackCodes[tvgTrackCode].includes(itspTrackCode)) {
-						// Highlight the invalid ITSP Track Code cell
-						itspTrackCodeCell.style.backgroundColor = colorLevels.error;
-					}
+				const allowed = fn_getValidItspCodes(tvgTrackCode, cardDate);
+				// null = no rule for this track/date, so nothing to check
+				if (allowed && !allowed.includes(itspTrackCode)) {
+					itspTrackCodeCell.style.backgroundColor = colorLevels.error;
+					itspTrackCodeCell.title = `Expected for ${cardDate}: ${allowed.join(' or ')}`;
 				}
 			}
 		});
+	}
+
+	function fn_getValidItspCodes(tvgTrackCode, date) {
+		const rules = validTrackCodes[tvgTrackCode];
+		if (!rules) return null;
+
+		const codes = rules
+			.filter(r => typeof r === 'string' ||
+				(date && (!r.from || date >= r.from) && (!r.to || date <= r.to)))
+			.map(r => typeof r === 'string' ? r : r.code);
+
+		return codes.length ? codes : null;
+	}
+
+	function fn_getCardDate() {
+		// Two inputs have id="CardDate" (one is hidden in the Edit modal), so target the date picker form
+		const input = document.querySelector('form[action="tvgCardList"] input[name="CardDate"]');
+		if (input?.value) return input.value;
+
+		const param = new URLSearchParams(location.search).get('CardDate');
+		if (param) return param.slice(0, 10);
+
+		const link = document.querySelector('a[href*="processTVGCard?CardDate="]');
+		const m = link?.getAttribute('href').match(/CardDate=(\d{4}-\d{2}-\d{2})/);
+		return m ? m[1] : null;
 	}
 
 	function fn_ShortenCells() {
