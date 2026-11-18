@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.10.3
+// @version      0.11.1
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
@@ -108,7 +108,19 @@
 		}
 	}
 	if (location.href.toLowerCase().includes('racebettype')) {
-		// used to highlight PlacePickAll
+		// Short delay so the page's dropdowns are fully built
+		setTimeout(() => {
+			try {
+				fn_selectPortNJ();
+			} catch (error) {
+				console.error('Error running fn_selectPortNJ:', error);
+			}
+			try {
+				fn_watchWagerProfileForBetTypes();
+			} catch (error) {
+				console.error('Error running fn_watchWagerProfileForBetTypes:', error);
+			}
+		}, 500);
 	}
 	if (location.href.toLowerCase().includes('reportdifferentrunners')) {
 		try {
@@ -141,6 +153,124 @@
 
 
 	// ALL FUNCTIONS
+
+	// Race Bet Type: profile that the Pool Blackouts table applies to
+	const BLACKOUT_PROFILE = 'PORT-NJ';
+
+	// Race Bet Type: bet types listed in the Wager Profile Pool Blackouts table.
+	// If the table has a Wager Profile column, only rows for profileName are used.
+	function fn_getBlacklistedBetTypes(profileName) {
+		const table = document.getElementById('datatable_Wager_Profile_Pool_Blackouts');
+		if (!table) {
+			console.log('Pool Blackouts table not found');
+			return [];
+		}
+
+		let betCol = -1;
+		let profileCol = -1;
+		table.querySelectorAll('thead th').forEach((th, i) => {
+			const text = th.textContent;
+			if (text.includes('Bet Type Pool Name')) betCol = i;
+			else if (/wager profile/i.test(text) && !/id/i.test(text)) profileCol = i;
+		});
+		if (betCol === -1) {
+			console.log('Bet Type Pool Name column not found');
+			return [];
+		}
+
+		// No profile column: the table only describes BLACKOUT_PROFILE
+		if (profileCol === -1 && profileName !== BLACKOUT_PROFILE) return [];
+
+		const betTypes = [];
+		table.querySelectorAll('tbody tr').forEach(row => {
+			const cells = row.querySelectorAll('td');
+			if (profileCol !== -1 && cells[profileCol]?.textContent.trim() !== profileName) return;
+			const text = cells[betCol]?.textContent.trim();
+			if (text) betTypes.push(text);
+		});
+
+		return betTypes;
+	}
+
+	// Race Bet Type: rebuild the SECOND BetTypePoolReferenceID dropdown for the selected profile.
+	// Starts from the page's original list every time, so switching profiles brings options back.
+	let betTypeOriginalOptions = null;
+	function fn_refreshBetTypeOptions() {
+		const selects = document.querySelectorAll('select#BetTypePoolReferenceID');
+		if (selects.length < 2) {
+			console.log(`Second bet type dropdown not found (found ${selects.length})`);
+			return;
+		}
+		const select = selects[1];
+
+		// Snapshot the untouched list the first time through
+		if (!betTypeOriginalOptions) {
+			betTypeOriginalOptions = Array.from(select.options).map(o => o.cloneNode(true));
+		}
+
+		const profileSelect = document.getElementById('TVGWagerProfileID');
+		const profileName = profileSelect?.selectedOptions[0]?.textContent.trim() || '';
+		const blacklisted = fn_getBlacklistedBetTypes(profileName);
+
+		const previousValue = select.value;
+		select.innerHTML = '';
+		let removed = 0;
+		betTypeOriginalOptions.forEach(original => {
+			// Bet type is the text inside the parentheses, e.g. "123 (Exacta)"
+			const m = original.textContent.match(/\(([^)]*)\)/);
+			if (m && blacklisted.includes(m[1].trim())) {
+				removed++;
+				return;
+			}
+			select.appendChild(original.cloneNode(true));
+		});
+
+		// Keep the user's choice if it's still available
+		if (Array.from(select.options).some(o => o.value === previousValue)) {
+			select.value = previousValue;
+		}
+
+		console.log(`✓ Bet types for ${profileName || '(no profile)'}: removed ${removed} blacklisted option(s)`);
+	}
+
+	// Race Bet Type: re-filter whenever the wager profile changes.
+	// Polls as well as listening, because select2/jQuery changes don't fire native events.
+	function fn_watchWagerProfileForBetTypes() {
+		const profileSelect = document.getElementById('TVGWagerProfileID');
+		let lastValue = null;
+
+		const check = () => {
+			const value = profileSelect ? profileSelect.value : '';
+			if (value === lastValue) return;
+			lastValue = value;
+			fn_refreshBetTypeOptions();
+		};
+
+		profileSelect?.addEventListener('change', check);
+		setInterval(check, 300);
+		check();
+	}
+
+	// Race Bet Type: auto-select PORT-NJ in the wager profile dropdown
+	function fn_selectPortNJ() {
+		const select = document.getElementById('TVGWagerProfileID');
+		if (!select) {
+			console.log('Wager profile dropdown not found');
+			return;
+		}
+
+		const options = Array.from(select.querySelectorAll('option'));
+		const portNJ = options.find(o => o.textContent.trim() === BLACKOUT_PROFILE);
+		if (!portNJ) {
+			console.log('PORT-NJ option not found');
+			return;
+		}
+
+		options.forEach(o => o.removeAttribute('selected'));
+		portNJ.setAttribute('selected', 'selected');
+		select.value = portNJ.value;
+		console.log('✓ Auto-selected PORT-NJ');
+	}
 	function fn_autoFillTrackName() {
 		const SPAN_ID = 'select2-AxcisTrackCode-container';
 		let lastAutoValue = '';

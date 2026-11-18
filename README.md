@@ -30,6 +30,10 @@ SGW Assist adds highlighting, validation, and shortcuts to SGW pages.
 ### Report Different Runners
 - Highlights runner discrepencies
 
+### Race Bet Type
+- Removes bet types listed in the Wager Profile Pool Blackouts table from the bet type dropdown
+- Auto-selects **PORT-NJ** as the wager profile
+
 ### Daily Overrides (Wager Profile)
 - **List Enabled Tracks** button: copies an alphabetical list of enabled tracks to the clipboard
 
