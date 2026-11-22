@@ -30,6 +30,10 @@ SGW Assist adds highlighting, validation, and shortcuts to SGW pages.
 ### Report Different Runners
 - Highlights runner discrepencies
 
+### Special Cards
+- Adds a **Race Ref** column (e.g. `DMR Race5`) pulled from Special TVG Race Conditions
+- Red if the race doesn't match the Linked TVG Race Number; yellow-orange if the race matches but the Linked TVG Track Code doesn't (hover for details)
+
 ### Race Bet Type
 - Removes bet types listed in the Wager Profile Pool Blackouts table from the bet type dropdown
 - Auto-selects **PORT-NJ** as the wager profile

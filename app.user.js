@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.11.1
+// @version      0.12.0
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
@@ -105,6 +105,13 @@
 			fn_highlightSpecialCardsConfigMissing();
 		} catch (error) {
 			console.error('Error running fn_highlightSpecialCardsConfigMissing:', error);
+		}
+	}
+	if (location.href.toLowerCase().includes('specialcards')) {
+		try {
+			fn_checkSpecialCardRaceRefs();
+		} catch (error) {
+			console.error('Error running fn_checkSpecialCardRaceRefs:', error);
 		}
 	}
 	if (location.href.toLowerCase().includes('racebettype')) {
@@ -747,6 +754,71 @@
 			const newCell = document.createElement('td');
 			newCell.textContent = raceRefText;
 			row.insertBefore(newCell, cells[configColIndex + 1]);
+		});
+	}
+
+	// Special Cards: pull "DMR - R5" from Special TVG Race Conditions into a "Race Ref" column
+	// and compare it with the Linked TVG Track Code / Linked TVG Race Number.
+	//   race number wrong            -> error
+	//   race right, track code wrong -> caution
+	function fn_checkSpecialCardRaceRefs() {
+		const tables = document.querySelectorAll('table[id^="datatable_Special_Cards"]');
+		tables.forEach(table => {
+			const headers = Array.from(table.querySelectorAll('thead th'));
+			const col = name => headers.findIndex(th => th.textContent.trim() === name);
+
+			const conditionsCol = col('Special TVG Race Conditions');
+			const linkedTrackCol = col('Linked TVG Track Code');
+			const linkedRaceCol = col('Linked TVG Race Number');
+			const insertAfterCol = col('Special TVG Race Number');
+
+			if ([conditionsCol, linkedTrackCol, linkedRaceCol, insertAfterCol].includes(-1)) {
+				console.log(`[SGW Assist] Special Cards columns not found in #${table.id}`);
+				return;
+			}
+
+			// New header right after "Special TVG Race Number" so it stays visible
+			const newHeader = document.createElement('th');
+			newHeader.textContent = 'Race Ref';
+			headers[insertAfterCol].after(newHeader);
+
+			let errors = 0;
+			let cautions = 0;
+			table.querySelectorAll('tbody tr').forEach(row => {
+				const cells = row.querySelectorAll('td');
+				if (cells.length <= Math.max(conditionsCol, linkedTrackCol, linkedRaceCol)) return; // e.g. "Nothing found" row
+
+				const conditions = cells[conditionsCol].textContent.trim();
+				const linkedTrack = cells[linkedTrackCol].textContent.trim().toUpperCase();
+				const linkedRace = parseInt(cells[linkedRaceCol].textContent.trim(), 10);
+
+				const newCell = document.createElement('td');
+				const match = conditions.match(/^\s*([A-Z0-9]{2,4})\s*[-–]\s*(?:RACE\s*)?R?\s*(\d{1,2})\b/i);
+
+				if (match) {
+					const track = match[1].toUpperCase();
+					const race = parseInt(match[2], 10);
+					newCell.textContent = `${track} Race${race}`;
+
+					const raceOk = race === linkedRace;
+					const trackOk = track === linkedTrack;
+					const linkedText = `${linkedTrack || '?'} Race${isNaN(linkedRace) ? '?' : linkedRace}`;
+
+					if (!raceOk) {
+						newCell.style.setProperty('background-color', colorLevels.error, 'important');
+						newCell.title = `Linked to ${linkedText}`;
+						errors++;
+					} else if (!trackOk) {
+						newCell.style.setProperty('background-color', colorLevels.caution, 'important');
+						newCell.title = `Race matches, but linked track is ${linkedTrack || '(blank)'}`;
+						cautions++;
+					}
+				}
+
+				cells[insertAfterCol].after(newCell);
+			});
+
+			console.log(`[SGW Assist] Special Cards race refs: ${errors} error(s), ${cautions} caution(s)`);
 		});
 	}
 
