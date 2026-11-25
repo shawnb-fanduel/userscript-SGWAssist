@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         SGW Assist
 // @namespace    fanduel.com
-// @version      0.12.0
+// @version      0.12.1
 // @description  Highlights possible concerns in SGW
 // @author       Shawn Brooker
 // @match        http*://*racing-sgw.prd.use2.racing.fndlint.net/*
-// @match        http*://racing-sgw.stg.use2.racing.fndlint.net/*
-// @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
 // @match        http*://racing-sgw.stg.use2.racing.fndlint.net/*
 // @match        http*://racing-sgw.int.use2.racing.fndlint.net/*
 // @downloadURL  https://raw.githubusercontent.com/shawnb-fanduel/userscript-SGWAssist/refs/heads/main/app.user.js
@@ -793,7 +791,9 @@
 				const linkedRace = parseInt(cells[linkedRaceCol].textContent.trim(), 10);
 
 				const newCell = document.createElement('td');
-				const match = conditions.match(/^\s*([A-Z0-9]{2,4})\s*[-–]\s*(?:RACE\s*)?R?\s*(\d{1,2})\b/i);
+				// Finds "DMR - R8" anywhere in the text (it may follow a stakes name, e.g. "Red Carpet S. DMR - R8").
+				// Case-sensitive on purpose so ordinary words like "Older - R5" don't match.
+				const match = conditions.match(/\b([A-Z][A-Z0-9]{1,3})\s*[-–]\s*(?:RACE|Race|R)\s*(\d{1,2})\b/);
 
 				if (match) {
 					const track = match[1].toUpperCase();
